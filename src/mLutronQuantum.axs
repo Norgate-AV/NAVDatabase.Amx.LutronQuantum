@@ -4,6 +4,7 @@ MODULE_NAME='mLutronQuantum'    (
                                 )
 
 (***********************************************************)
+#DEFINE USING_NAV_MODULE_BASE_CALLBACKS
 #DEFINE USING_NAV_MODULE_BASE_PROPERTY_EVENT_CALLBACK
 #DEFINE USING_NAV_MODULE_BASE_PASSTHRU_EVENT_CALLBACK
 #DEFINE USING_NAV_STRING_GATHER_CALLBACK
@@ -96,7 +97,7 @@ DEFINE_MUTUALLY_EXCLUSIVE
 define_function SendString(char payload[]) {
     payload = "payload, NAV_CR, NAV_LF"
 
-    NAVLog(NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_TO, dvPort, payload))
+    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_TO, dvPort, payload))
 
     send_string dvPort, "payload"
 }
@@ -157,8 +158,12 @@ define_function NAVModulePropertyEventCallback(_NAVModulePropertyEvent event) {
 }
 
 
-define_function NAVModulePassthruEventCallback(char data[]) {
-    SendString(data)
+define_function NAVModulePassthruEventCallback(_NAVModulePassthruEvent event) {
+    if (event.Device != vdvObject) {
+        return
+    }
+
+    SendString(event.Payload)
 }
 
 
@@ -170,7 +175,7 @@ define_function NAVStringGatherCallback(_NAVStringGatherResult args) {
     data = args.Data
     delimiter = args.Delimiter
 
-    NAVLog(NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_PARSING_STRING_FROM, dvPort, data))
+    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_PARSING_STRING_FROM, dvPort, data))
 
     data = NAVStripRight(data, length_array(delimiter))
 }
@@ -215,7 +220,7 @@ data_event[dvPort] {
         }
     }
     string: {
-        NAVLog(NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_FROM, data.device, data.text))
+        NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_FROM, data.device, data.text))
 
         select {
             active (1): {
@@ -231,7 +236,7 @@ data_event[vdvObject] {
     command: {
         stack_var _NAVSnapiMessage message
 
-        NAVLog(NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_COMMAND_FROM, data.device, data.text))
+        NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_COMMAND_FROM, data.device, data.text))
 
         NAVParseSnapiMessage(data.text, message)
 
