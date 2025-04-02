@@ -9,6 +9,7 @@ MODULE_NAME='mLutronQuantum'    (
 #DEFINE USING_NAV_MODULE_BASE_PASSTHRU_EVENT_CALLBACK
 #DEFINE USING_NAV_STRING_GATHER_CALLBACK
 #include 'NAVFoundation.ModuleBase.axi'
+#include 'NAVFoundation.TimelineUtils.axi'
 #include 'NAVFoundation.SocketUtils.axi'
 #include 'NAVFoundation.StringUtils.axi'
 
@@ -55,9 +56,9 @@ DEFINE_CONSTANT
 
 constant integer IP_PORT = NAV_TELNET_PORT
 
-constant long TL_DRIVE      = 1
-constant long TL_IP_CHECK   = 2
-constant long TL_HEARTBEAT  = 3
+constant long TL_SOCKET_CHECK   = 1
+
+constant long TL_SOCKET_CHECK_INTERVAL[] = { 3000 }
 
 
 (***********************************************************)
@@ -69,10 +70,6 @@ DEFINE_TYPE
 (*               VARIABLE DEFINITIONS GO BELOW             *)
 (***********************************************************)
 DEFINE_VARIABLE
-
-volatile long driveTick[] = { 200 }
-volatile long ipCheck[] = { 3000 }
-volatile long heartbeat[] = { 20000 }
 
 volatile char area[NAV_MAX_CHARS]
 volatile char id[NAV_MAX_CHARS]
@@ -97,7 +94,12 @@ DEFINE_MUTUALLY_EXCLUSIVE
 define_function SendString(char payload[]) {
     payload = "payload, NAV_CR, NAV_LF"
 
-    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_TO, dvPort, payload))
+    if (dvPort.NUMBER == 0) {
+        NAVErrorLog(NAV_LOG_LEVEL_DEBUG,
+                    NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_TO,
+                                                dvPort,
+                                                payload))
+    }
 
     send_string dvPort, "payload"
 }
@@ -135,9 +137,6 @@ define_function Reset() {
     module.Device.SocketConnection.IsConnected = false
     module.Device.IsCommunicating = false
     module.Device.IsInitialized = false
-
-    NAVTimelineStop(TL_HEARTBEAT)
-    NAVTimelineStop(TL_DRIVE)
 }
 
 
@@ -146,7 +145,11 @@ define_function NAVModulePropertyEventCallback(_NAVModulePropertyEvent event) {
         case NAV_MODULE_PROPERTY_EVENT_IP_ADDRESS: {
             module.Device.SocketConnection.Address = event.Args[1]
             module.Device.SocketConnection.Port = IP_PORT
-            NAVTimelineStart(TL_IP_CHECK, ipCheck, TIMELINE_ABSOLUTE, TIMELINE_REPEAT)
+
+            NAVTimelineStart(TL_SOCKET_CHECK,
+                            TL_SOCKET_CHECK_INTERVAL,
+                            TIMELINE_ABSOLUTE,
+                            TIMELINE_REPEAT)
         }
         case 'AREA': {
             area = event.Args[1]
@@ -169,15 +172,12 @@ define_function NAVModulePassthruEventCallback(_NAVModulePassthruEvent event) {
 
 #IF_DEFINED USING_NAV_STRING_GATHER_CALLBACK
 define_function NAVStringGatherCallback(_NAVStringGatherResult args) {
-    stack_var char data[NAV_MAX_BUFFER]
-    stack_var char delimiter[NAV_MAX_CHARS]
-
-    data = args.Data
-    delimiter = args.Delimiter
-
-    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_PARSING_STRING_FROM, dvPort, data))
-
-    data = NAVStripRight(data, length_array(delimiter))
+    if (dvPort.NUMBER == 0) {
+        NAVErrorLog(NAV_LOG_LEVEL_DEBUG,
+                    NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_PARSING_STRING_FROM,
+                                                dvPort,
+                                                args.Data))
+    }
 }
 #END_IF
 
@@ -220,7 +220,12 @@ data_event[dvPort] {
         }
     }
     string: {
-        NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_FROM, data.device, data.text))
+        if (data.device.number == 0) {
+            NAVErrorLog(NAV_LOG_LEVEL_DEBUG,
+                        NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_FROM,
+                                                    data.device,
+                                                    data.text))
+        }
 
         select {
             active (1): {
@@ -229,23 +234,6 @@ data_event[dvPort] {
         }
     }
 
-}
-
-
-data_event[vdvObject] {
-    command: {
-        stack_var _NAVSnapiMessage message
-
-        NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_COMMAND_FROM, data.device, data.text))
-
-        NAVParseSnapiMessage(data.text, message)
-
-        switch (message.Header) {
-            default: {
-
-            }
-        }
-    }
 }
 
 
